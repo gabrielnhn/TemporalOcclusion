@@ -64,7 +64,9 @@ class TemPCCStreamLoader:
             f.seek(rgb_offset)
             raw_rgb = np.fromfile(f, dtype=np.uint8, count=self.width * self.height * 4)
             # Normalize to 0-1
-            rgb = torch.from_numpy(raw_rgb.reshape(-1, 4).astype(np.float32) / 255.0).to(self.device)
+            rgb = torch.from_numpy(
+                raw_rgb.reshape(-1, 4).astype(np.float32) / 255.0
+            ).to(self.device)
 
         # Read Depth
         depth_stride = 4 + self.width * self.height * 2
@@ -93,12 +95,13 @@ class TemPCCStreamLoader:
         points = torch.stack([x * scale, y * scale, z * scale], dim=-1)
         return points
 
-    def get_pointcloud(self, frame_idx):
+    def get_pointcloud(self, frame_idx, maxdepth=3.0):
         rgb, depth = self.get_frame(frame_idx)
         points = self.unproject(depth)
         
-        # Filter Background (> 3m) and invalid depth (< 0.1m)
-        mask = (depth > 0.1) & (depth < 3.5)
+        # Filter Background (> 3m?) and invalid depth (< 0.1m)
+        mask = (depth > 0.1) & (depth < maxdepth)
+        # mask = (depth > 0.1)
         
         valid_points = points[mask]
         valid_rgb = rgb[mask]
@@ -126,18 +129,17 @@ loader = TemPCCStreamLoader("../data", cam_config['rgb_path'], cam_config['depth
 
 # Initialize Polyscope
 ps.init()
-ps.set_up_dir("y_up") # Adjust if your camera is rotated
+ps.set_up_dir("y_up") 
 ps.set_ground_plane_mode("shadow_only")
 
 # State for the animation loop
 current_frame = 0
 is_playing = True
-# ps_cloud.set_radius(0.005) 
-
+maxdepth = 3.0
 
 
 def update_loop():
-    global current_frame, is_playing
+    global current_frame, is_playing, maxdepth
 
     # GUI Control to Pause/Play
     if ps_imgui.Button("Pause" if is_playing else "Play"):
@@ -147,11 +149,15 @@ def update_loop():
     changed, new_frame = ps_imgui.SliderInt("Frame", current_frame, 0, loader.num_frames - 1)
     if changed:
         current_frame = new_frame
-        is_playing = False # Pause if manually scrubbing
-  
+        is_playing = False
+
+    changed, newmaxdepth = ps_imgui.SliderFloat("Max Depth", maxdepth, v_min=0.1, v_max=10)
+    if changed:
+        maxdepth = newmaxdepth
+
 
     # Get data from your existing loader
-    pc = loader.get_pointcloud(frame_idx=current_frame)
+    pc = loader.get_pointcloud(frame_idx=current_frame, maxdepth=maxdepth)
     
     # Extract raw tensors from PyTorch3D structure
     # Polyscope needs raw (N,3) arrays, not Pointclouds objects
