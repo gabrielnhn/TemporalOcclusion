@@ -146,13 +146,15 @@ class TemPCCStreamLoader:
         return valid_points, valid_rgb
 
 # Setup
+root_dir = "../dataValA"
+# root_dir = "../data2"
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if not os.path.exists("../data2/dataset.json"):
-    print("dataset.json not found")
-    exit()
 
-with open("../data2/dataset.json", 'r') as f:
+# with open("../data2/dataset.json", 'r') as f:
+with open(os.path.join(root_dir, "dataset.json"), 'r') as f:
     config = json.load(f)
 
 loaders = []
@@ -161,7 +163,8 @@ for cam_idx in range(len(config['cameras'])):
     cam_config = config['cameras'][cam_idx]
     print(f"Processing: {cam_config['id']}")
     loader = TemPCCStreamLoader(
-        "../data2",
+        # "../data2",
+        root_dir,
         cam_config['rgb_path'],
         cam_config['depth_path'],
         cam_config['transformation_matrix'],
